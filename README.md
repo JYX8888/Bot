@@ -1,133 +1,217 @@
 ﻿# corebot
 
-`corebot` 是一个基于 LangChain 生态重构的最小化本地智能体项目，聚焦在“本地代码仓库 / 本地工作区协作”这个核心场景。
+一个面向本地代码仓库与工作区协作的轻量级 AI Agent。`corebot` 提供命令行对话、文件操作、受控 Shell、Skills 和 MCP 扩展能力，适合用来做仓库分析、代码辅助、流程自动化和私有模型接入。
 
-它不是一个大而全的平台，而是一个面向开发与仓库分析任务的轻量 bot：
+## 项目亮点
 
-- 通过命令行进行对话
-- 调用大模型理解代码和文件内容
-- 在工作区内安全地读写文件、搜索内容、执行命令
-- 保存本地会话，便于持续对话和多轮协作
+- 轻量可控：聚焦本地工作区协作，不追求臃肿平台化
+- 命令行优先：开箱即用，适合开发者日常使用
+- 工具能力完整：文件读写、搜索、Shell 执行一体化
+- 易于扩展：支持 Skills 和 MCP，可逐步接入外部能力
+- 兼容开放接口：支持 OpenAI 兼容模型服务
 
-## 这个项目可以做什么
+## 它可以做什么
 
-`corebot` 适合以下场景：
+`corebot` 适合这些典型场景：
 
-- 分析一个已有仓库的结构、模块职责和核心流程
-- 阅读源码并回答“某个功能在哪里实现”“某段逻辑做了什么”
-- 在工作区内搜索文件、搜索关键字、定位代码入口
-- 帮助修改文本文件或小范围代码片段
-- 在受限工作区内执行命令，例如列目录、查看 git 信息、运行只读命令
-- 作为一个最小可用的本地 coding bot 原型，继续扩展成更完整的 agent
+- 分析一个现有仓库的结构、模块职责和核心流程
+- 阅读源码并回答“某个功能在哪里实现”“一段逻辑做了什么”
+- 在工作区中快速搜索文件、关键字和代码入口
+- 辅助修改配置、文档和小范围代码片段
+- 在受限目录中执行安全命令，例如查看目录、git 状态、运行只读脚本
+- 加载特定 Skills，让模型按特定工作流回答问题
+- 通过 MCP 接入外部服务，把第三方能力变成可调用工具
+- 作为企业内网或私有部署环境中的最小本地 Agent 基座
 
-如果你想做一个“类似 nanobot，但只保留最核心能力”的 bot，这个项目就是为这个目标搭的基础版本。
+## 当前功能
 
-## 当前核心功能
+### 基础对话能力
 
-目前已经具备以下能力：
+- 交互式 CLI 对话
+- 单轮命令式提问
+- 本地会话持久化，支持连续多轮协作
 
-- `CLI 对话`：通过命令行进行单轮或多轮聊天
-- `会话持久化`：本地保存历史消息，下一次可以继续对话
-- `文件工具`：
-  - 列出目录
-  - 读取文件
-  - 写入文件
-  - 替换文件中的文本
-  - 按 glob 查找文件
-  - 按正则搜索文件内容
-- `Shell 工具`：在工作区内执行受保护的命令，并阻止高风险命令
-- `模型接入`：支持 OpenAI 兼容接口，当前已兼容你本地使用的 ModelScope OpenAI 兼容地址
-- `本地配置加载`：支持读取 `bot.local.json`，可复用 nanobot 风格的模型配置
+### 工作区工具
 
-## 项目结构
+- 列出目录
+- 读取文件
+- 写入文件
+- 替换文件中的文本
+- 按 glob 查找文件
+- 按正则搜索文件内容
+- 在工作区内执行受保护的 Shell 命令
 
-核心目录如下：
+### 扩展能力
 
-- `corebot/agent.py`：最小 agent 主循环，负责模型调用与工具执行
-- `corebot/cli.py`：命令行入口
-- `corebot/config.py`：配置加载与运行参数解析
-- `corebot/prompts.py`：系统提示词
-- `corebot/session_store.py`：会话持久化
-- `corebot/tools/`：文件工具与 shell 工具
-- `tests/`：基础测试
+- Skills：从 `SKILL.md` 加载技能描述与工作流内容
+- MCP：连接 MCP Server，并把工具 / 资源 / prompt 暴露给模型
+- 自定义模型配置：支持本地 JSON 配置与环境变量
 
-## 配置方式
+## 目录结构
 
-项目支持两种配置方式。
-
-### 1. 环境变量
-
-可用环境变量：
-
-- `BOT_MODEL`：模型名称，默认 `gpt-4o-mini`
-- `BOT_API_KEY`：模型 API Key；如果未设置，会回退到 `OPENAI_API_KEY`
-- `BOT_BASE_URL`：OpenAI 兼容接口地址
-- `BOT_MAX_TOKENS`：模型最大输出 token 数
-- `BOT_DATA_DIR`：本地数据目录
-- `BOT_MAX_ITERATIONS`：单次对话中工具循环的最大轮数，默认 `8`
-- `BOT_SHELL_TIMEOUT`：shell 命令超时时间，默认 `60` 秒
-- `BOT_CONFIG_FILE`：配置文件路径，默认读取项目根目录下的 `bot.local.json`
-
-如果使用的是本地或第三方 OpenAI 兼容接口，在配置了 `BOT_BASE_URL` 但没有设置 key 的情况下，运行时会自动使用占位 key `EMPTY`。
-
-### 2. 本地 JSON 配置文件
-
-你也可以在项目根目录放置一个 `bot.local.json` 文件。
-
-`corebot` 能识别 nanobot 风格配置中的这两个部分：
-
-- `providers.custom`
-- `agents.defaults`
-
-这样就可以直接复用已有的模型配置，而不需要每次手动导出环境变量。
-
-## 如何运行
-
-在 `D:\xiangmu\agent\bot` 目录下运行。
-
-### 查看当前配置
-
-```powershell
-python -m corebot status --workspace D:\xiangmu\agent\nanobot-main
+```text
+corebot/
+  agent.py           # Agent 主循环
+  cli.py             # 命令行入口
+  config.py          # 配置加载
+  prompts.py         # 系统提示词
+  session_store.py   # 会话持久化
+  skills.py          # Skills 加载与注入
+  mcp.py             # MCP 连接与包装
+  tools/
+    files.py         # 文件相关工具
+    shell.py         # Shell 工具
+tests/               # 基础测试
+README.md
 ```
 
-### 启动交互式对话
+## 快速开始
+
+在项目目录下运行：
 
 ```powershell
-python -m corebot chat --workspace D:\xiangmu\agent\nanobot-main
+python -m corebot --help
 ```
 
-### 单轮提问
+查看当前配置：
 
 ```powershell
-python -m corebot chat "帮我概括这个仓库的核心结构" --workspace D:\xiangmu\agent\nanobot-main
+python -m corebot status --workspace D:\path\to\your\workspace
 ```
 
-### 删除某个会话
+启动交互式对话：
+
+```powershell
+python -m corebot chat --workspace D:\path\to\your\workspace
+```
+
+执行单轮提问：
+
+```powershell
+python -m corebot chat "帮我概括这个仓库的核心结构" --workspace D:\path\to\your\workspace
+```
+
+删除某个会话：
 
 ```powershell
 python -m corebot clear-session default
 ```
 
-## 适合作为哪些用途的基础
+查看当前可用 Skills：
 
-这个项目很适合作为以下工作的起点：
+```powershell
+python -m corebot list-skills --workspace D:\path\to\your\workspace
+```
 
-- 最小可用本地代码助手
+## 配置方式
+
+项目支持两种主要配置方式。
+
+### 环境变量
+
+- `BOT_MODEL`：模型名称，默认 `gpt-4o-mini`
+- `BOT_API_KEY`：模型 API Key；未设置时回退到 `OPENAI_API_KEY`
+- `BOT_BASE_URL`：OpenAI 兼容接口地址
+- `BOT_MAX_TOKENS`：模型最大输出 token 数
+- `BOT_DATA_DIR`：本地数据目录
+- `BOT_MAX_ITERATIONS`：单次对话中工具循环的最大轮数，默认 `8`
+- `BOT_SHELL_TIMEOUT`：Shell 命令超时时间，默认 `60` 秒
+- `BOT_CONFIG_FILE`：配置文件路径，默认读取项目根目录下的 `bot.local.json`
+- `BOT_SKILLS_DIRS`：额外 Skills 目录，多个路径用系统路径分隔符连接
+
+如果配置了 `BOT_BASE_URL` 但没有配置 key，运行时会自动使用占位 key `EMPTY`。
+
+### 本地 JSON 配置文件
+
+你也可以在项目根目录放置 `bot.local.json`，集中管理模型、MCP 与 Skills 相关配置。
+
+示例：
+
+```json
+{
+  "providers": {
+    "custom": {
+      "apiKey": "your-api-key",
+      "apiBase": "https://your-openai-compatible-endpoint/v1/"
+    }
+  },
+  "agents": {
+    "defaults": {
+      "provider": "custom",
+      "model": "your-model-name",
+      "temperature": 0.7,
+      "maxTokens": 4096
+    }
+  },
+  "skills": {
+    "dirs": ["D:/path/to/shared/skills"]
+  },
+  "mcpServers": {
+    "demo": {
+      "type": "stdio",
+      "command": "python",
+      "args": ["path/to/mcp_server.py"],
+      "enabledTools": ["*"],
+      "toolTimeout": 30
+    }
+  }
+}
+```
+
+## Skills
+
+### Skills 目录约定
+
+默认会扫描以下目录中的 `SKILL.md`：
+
+- `workspace/skills/<skill-name>/SKILL.md`
+- `workspace/nanobot/skills/<skill-name>/SKILL.md`（兼容已有工作区内的技能目录结构）
+- `skills.builtinDir` 指定目录
+- `skills.dirs` 指定目录
+- `BOT_SKILLS_DIRS` 指定目录
+
+### Skills 触发规则
+
+- 在问题中明确写出 skill 名称，例如 `git`、`review`、`deploy`
+- 使用 `$skill_name` 形式显式引用，例如 `$git`
+- 如果某个 skill 的 frontmatter 里设置了 `always: true`，则会自动加载
+
+## MCP
+
+`corebot` 支持在对话开始时自动连接 MCP Server，并将其提供的能力暴露给模型调用。
+
+支持的常见传输方式：
+
+- `stdio`
+- `sse`
+- `streamableHttp`
+
+支持的常见配置字段：
+
+- `type`
+- `command`、`args`、`env`
+- `url`、`headers`
+- `enabledTools`
+- `toolTimeout`
+
+## 适用场景
+
+`corebot` 特别适合作为以下项目的基础：
+
+- 本地代码助手
 - 仓库分析机器人
-- 轻量版 coding agent
-- 自定义企业内网 OpenAI 兼容模型接入样板
-- 后续扩展 WebUI、HTTP API、消息渠道之前的核心执行层
+- 私有模型接入样板
+- Skill + MCP 混合能力实验平台
+- 后续扩展 WebUI / HTTP API / 消息渠道之前的核心执行层
 
 ## 当前边界
 
-为了保持项目简单，目前没有包含这些能力：
+为了保持项目简单，当前版本仍然没有包含这些能力：
 
 - WebUI
-- 多聊天渠道接入（如 QQ、Telegram、Discord）
-- MCP
-- cron / 定时任务
-- 多代理协作
-- 完整的记忆系统与复杂调度
+- 多聊天渠道接入
+- 定时任务 / 调度系统
+- 多 Agent 协作
+- 完整长期记忆与复杂编排
 
-这些能力可以后续继续在当前基础上往上加，但当前版本刻意只保留“最核心、最能工作的那一层”。
+如果后续继续扩展，`corebot` 可以自然演进为更完整的本地 Agent 系统。

@@ -38,6 +38,17 @@ class ConfigTest(unittest.TestCase):
                             "maxTokens": 2048,
                         }
                     },
+                    "mcpServers": {
+                        "demo": {
+                            "type": "stdio",
+                            "command": "python",
+                            "args": ["demo.py"],
+                        }
+                    },
+                    "skills": {
+                        "builtinDir": str(workspace / "builtin_skills"),
+                        "dirs": [str(workspace / "shared_skills")],
+                    },
                 }
             ),
             encoding="utf-8",
@@ -59,6 +70,9 @@ class ConfigTest(unittest.TestCase):
         self.assertEqual(settings.model, "demo-model")
         self.assertEqual(settings.temperature, 0.7)
         self.assertEqual(settings.max_tokens, 2048)
+        self.assertIn("demo", settings.mcp_servers)
+        self.assertEqual(settings.builtin_skills_dir, (workspace / "builtin_skills").resolve())
+        self.assertEqual(settings.extra_skills_dirs, [(workspace / "shared_skills").resolve()])
 
 
 if __name__ == "__main__":

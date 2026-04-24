@@ -5,9 +5,9 @@ from datetime import datetime
 from corebot.config import BotSettings
 
 
-def build_system_prompt(settings: BotSettings) -> str:
+def build_system_prompt(settings: BotSettings, skills_context: str = "") -> str:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    return f"""You are corebot, a focused coding assistant for a local workspace.
+    prompt = f"""You are corebot, a focused coding assistant for a local workspace.
 
 Current time: {now}
 Workspace: {settings.workspace}
@@ -26,3 +26,6 @@ Primary job:
 - modify files when asked
 - run safe workspace commands when helpful
 """
+    if skills_context:
+        prompt += f"\n\n{skills_context}"
+    return prompt

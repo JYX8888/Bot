@@ -18,6 +18,9 @@ class BotSettings(BaseModel):
     max_iterations: int = 8
     shell_timeout: int = 60
     max_tool_output_chars: int = 8000
+    mcp_servers: dict[str, dict] = {}
+    builtin_skills_dir: Path | None = None
+    extra_skills_dirs: list[Path] = []
 
     @staticmethod
     def _load_json_config(project_root: Path) -> dict:
@@ -36,12 +39,29 @@ class BotSettings(BaseModel):
         provider_block = providers.get(provider_name, {}) if provider_name else {}
         return provider_block, defaults
 
+    @staticmethod
+    def _load_skills_settings(config: dict) -> tuple[Path | None, list[Path]]:
+        skills_cfg = config.get("skills", {})
+        builtin_dir = skills_cfg.get("builtinDir") or skills_cfg.get("builtin_dir")
+        dirs = skills_cfg.get("dirs", [])
+        env_dirs = os.environ.get("BOT_SKILLS_DIRS")
+        if env_dirs:
+            dirs = list(dirs) + [part for part in env_dirs.split(os.pathsep) if part]
+        builtin_path = Path(builtin_dir).expanduser().resolve() if builtin_dir else None
+        resolved_dirs = [Path(item).expanduser().resolve() for item in dirs]
+        return builtin_path, resolved_dirs
+
+    @staticmethod
+    def _load_mcp_servers(config: dict) -> dict[str, dict]:
+        return config.get("mcpServers", config.get("mcp_servers", {}))
+
     @classmethod
     def load(cls, workspace: Path | None = None) -> "BotSettings":
         project_root = Path(__file__).resolve().parents[1]
         workspace_path = (workspace or Path.cwd()).resolve()
         config = cls._load_json_config(project_root)
         provider_block, defaults = cls._nanobot_defaults(config)
+        builtin_skills_dir, extra_skills_dirs = cls._load_skills_settings(config)
         data_dir = Path(os.environ.get("BOT_DATA_DIR", project_root / "data")).resolve()
         api_key = (
             os.environ.get("BOT_API_KEY")
@@ -74,6 +94,9 @@ class BotSettings(BaseModel):
             max_iterations=int(os.environ.get("BOT_MAX_ITERATIONS", "8")),
             shell_timeout=int(os.environ.get("BOT_SHELL_TIMEOUT", "60")),
             max_tool_output_chars=int(os.environ.get("BOT_MAX_TOOL_OUTPUT_CHARS", "8000")),
+            mcp_servers=cls._load_mcp_servers(config),
+            builtin_skills_dir=builtin_skills_dir,
+            extra_skills_dirs=extra_skills_dirs,
         )
 
     @property
