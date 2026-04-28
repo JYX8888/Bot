@@ -1,4 +1,6 @@
-﻿from __future__ import annotations
+"""会话存储测试。"""
+
+from __future__ import annotations
 
 import shutil
 from pathlib import Path
@@ -13,7 +15,10 @@ from langchain_core.messages import AIMessage, HumanMessage
 
 
 class SessionStoreTest(unittest.TestCase):
+    """验证原始消息历史的保存与读取。"""
+
     def _make_dir(self, name: str) -> Path:
+        """创建临时目录并在测试结束后清理。"""
         path = Path(__file__).resolve().parent / ".session_tmp" / name
         if path.exists():
             shutil.rmtree(path)
@@ -22,6 +27,7 @@ class SessionStoreTest(unittest.TestCase):
         return path
 
     def test_save_and_load_messages(self) -> None:
+        """验证消息保存后可以完整读回。"""
         sessions_dir = self._make_dir("save_load")
         store = SessionStore(sessions_dir)
         messages = [HumanMessage(content="hello"), AIMessage(content="world")]

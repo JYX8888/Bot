@@ -1,6 +1,6 @@
 ﻿# corebot
 
-一个面向本地代码仓库与工作区协作的轻量级 AI Agent。`corebot` 提供命令行对话、文件操作、受控 Shell、Skills 和 MCP 扩展能力，适合用来做仓库分析、代码辅助、流程自动化和私有模型接入。
+一个面向本地代码仓库与工作区协作的轻量级 AI Agent。`corebot` 提供命令行对话、文件操作、受控 Shell、Skills、MCP 和结构化记忆能力，适合用来做仓库分析、代码辅助、流程自动化和私有模型接入。
 
 ## 项目亮点
 
@@ -8,7 +8,9 @@
 - 命令行优先：开箱即用，适合开发者日常使用
 - 工具能力完整：文件读写、搜索、Shell 执行一体化
 - 易于扩展：支持 Skills 和 MCP，可逐步接入外部能力
+- 上下文会积累：支持会话摘要、用户偏好、项目记忆和历史召回
 - 兼容开放接口：支持 OpenAI 兼容模型服务
+- 学习友好：源码已补充系统化中文注释，便于二次开发和继续扩展
 
 ## 它可以做什么
 
@@ -21,6 +23,7 @@
 - 在受限目录中执行安全命令，例如查看目录、git 状态、运行只读脚本
 - 加载特定 Skills，让模型按特定工作流回答问题
 - 通过 MCP 接入外部服务，把第三方能力变成可调用工具
+- 记住用户偏好、项目决策和最近任务，让后续对话更贴合当前工程
 - 作为企业内网或私有部署环境中的最小本地 Agent 基座
 
 ## 当前功能
@@ -30,6 +33,9 @@
 - 交互式 CLI 对话
 - 单轮命令式提问
 - 本地会话持久化，支持连续多轮协作
+- 自动生成会话摘要，并在长对话时裁剪历史消息
+- 持久化用户偏好、项目事实、项目决策与常用流程
+- 按关键词召回相关历史记忆，减少重复说明
 
 ### 工作区工具
 
@@ -44,6 +50,7 @@
 ### 扩展能力
 
 - Skills：从 `SKILL.md` 加载技能描述与工作流内容
+- Skills 上下文增强：支持优先级、触发词、依赖和任务类型匹配
 - MCP：连接 MCP Server，并把工具 / 资源 / prompt 暴露给模型
 - 自定义模型配置：支持本地 JSON 配置与环境变量
 
@@ -56,6 +63,7 @@ corebot/
   config.py          # 配置加载
   prompts.py         # 系统提示词
   session_store.py   # 会话持久化
+  memory.py          # 结构化记忆与召回
   skills.py          # Skills 加载与注入
   mcp.py             # MCP 连接与包装
   tools/
@@ -97,10 +105,18 @@ python -m corebot chat "帮我概括这个仓库的核心结构" --workspace D:\
 python -m corebot clear-session default
 ```
 
+这个命令会同时删除该会话的原始消息和对应的结构化记忆。
+
 查看当前可用 Skills：
 
 ```powershell
 python -m corebot list-skills --workspace D:\path\to\your\workspace
+```
+
+查看当前沉淀下来的记忆：
+
+```powershell
+python -m corebot show-memory --workspace D:\path\to\your\workspace --session default
 ```
 
 ## 配置方式
@@ -116,6 +132,9 @@ python -m corebot list-skills --workspace D:\path\to\your\workspace
 - `BOT_DATA_DIR`：本地数据目录
 - `BOT_MAX_ITERATIONS`：单次对话中工具循环的最大轮数，默认 `8`
 - `BOT_SHELL_TIMEOUT`：Shell 命令超时时间，默认 `60` 秒
+- `BOT_MAX_HISTORY_MESSAGES`：运行时保留的历史原始消息数，默认 `12`
+- `BOT_MAX_RECALLED_MEMORIES`：每轮最多召回的历史记忆条数，默认 `6`
+- `BOT_MAX_SESSION_REQUESTS`：单个会话保留的最近请求数，默认 `6`
 - `BOT_CONFIG_FILE`：配置文件路径，默认读取项目根目录下的 `bot.local.json`
 - `BOT_SKILLS_DIRS`：额外 Skills 目录，多个路径用系统路径分隔符连接
 
@@ -146,6 +165,11 @@ python -m corebot list-skills --workspace D:\path\to\your\workspace
   "skills": {
     "dirs": ["D:/path/to/shared/skills"]
   },
+  "memory": {
+    "historyWindow": 12,
+    "maxRecalledItems": 6,
+    "maxSessionRequests": 6
+  },
   "mcpServers": {
     "demo": {
       "type": "stdio",
@@ -165,7 +189,6 @@ python -m corebot list-skills --workspace D:\path\to\your\workspace
 默认会扫描以下目录中的 `SKILL.md`：
 
 - `workspace/skills/<skill-name>/SKILL.md`
-- `workspace/nanobot/skills/<skill-name>/SKILL.md`（兼容已有工作区内的技能目录结构）
 - `skills.builtinDir` 指定目录
 - `skills.dirs` 指定目录
 - `BOT_SKILLS_DIRS` 指定目录
@@ -175,6 +198,23 @@ python -m corebot list-skills --workspace D:\path\to\your\workspace
 - 在问题中明确写出 skill 名称，例如 `git`、`review`、`deploy`
 - 使用 `$skill_name` 形式显式引用，例如 `$git`
 - 如果某个 skill 的 frontmatter 里设置了 `always: true`，则会自动加载
+- 可以通过 `triggers`、`priority`、`dependsOn`、`taskTypes` 配置更细粒度的技能激活规则
+
+## 记忆系统
+
+`corebot` 当前内置三层记忆：
+
+- 短期记忆：同一会话的消息持久化
+- 中期记忆：会话摘要、最近请求、已确认决策、后续事项
+- 长期记忆：用户偏好、固定约束、项目事实、项目决策与常用流程
+
+每一轮对话都会自动执行：
+
+- 从历史消息中提炼会话摘要
+- 从用户输入中抽取偏好、流程和约束
+- 从当前任务中沉淀项目级事实与决策
+- 根据本轮问题按关键词召回最相关的历史记忆
+- 当历史过长时，只保留最近的原始消息，并结合摘要继续推理
 
 ## MCP
 
@@ -202,6 +242,7 @@ python -m corebot list-skills --workspace D:\path\to\your\workspace
 - 仓库分析机器人
 - 私有模型接入样板
 - Skill + MCP 混合能力实验平台
+- 持续积累上下文的本地工程助手
 - 后续扩展 WebUI / HTTP API / 消息渠道之前的核心执行层
 
 ## 当前边界
@@ -212,6 +253,7 @@ python -m corebot list-skills --workspace D:\path\to\your\workspace
 - 多聊天渠道接入
 - 定时任务 / 调度系统
 - 多 Agent 协作
-- 完整长期记忆与复杂编排
+- 向量检索与嵌入式长期记忆
+- 更复杂的工作流编排与自动学习策略
 
 如果后续继续扩展，`corebot` 可以自然演进为更完整的本地 Agent 系统。

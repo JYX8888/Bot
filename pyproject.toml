@@ -1,7 +1,7 @@
 [project]
 name = "corebot"
 version = "0.1.0"
-description = "A minimal LangChain-based coding bot"
+description = "面向本地工作区的轻量级编码机器人"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
